@@ -1,0 +1,15 @@
+# Install Telethon from master branch (required for colored buttons)
+git+https://github.com/LonamiWebs/Telethon.git
+
+# Database
+motor==3.4.0
+pymongo==4.7.3
+
+# Async HTTP (health server)
+aiohttp==3.9.5
+
+# Scheduler
+APScheduler==3.10.4
+
+# Environment variables
+python-dotenv==1.0.1
