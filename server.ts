@@ -113,9 +113,10 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static("dist"));
+    const distPath = path.resolve(process.cwd(), "dist");
+    app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.resolve("dist", "index.html"));
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 

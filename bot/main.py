@@ -64,7 +64,7 @@ async def main():
     await create_indexes()
     setup_handlers()
     await set_bot_commands()
-    await start_health_server()
+    # await start_health_server()  # Disabled to prevent port conflicts on Render
     init_scheduler(client)
     me = await client.get_me()
     log.info(f"Bot running as @{me.username}")
