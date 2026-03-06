@@ -14,6 +14,10 @@ async function startServer() {
   app.use(express.json());
 
   // API Routes
+  app.get("/api/health", (req, res) => {
+    res.send("OK");
+  });
+
   app.get("/api/status", (req, res) => {
     const pythonAvailable = spawnSync("python3", ["--version"]).status === 0;
     const pipAvailable = spawnSync("pip3", ["--version"]).status === 0;
