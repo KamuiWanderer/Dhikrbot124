@@ -15,7 +15,8 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN") or ""
 # Bot Configuration
 OWNER_ID = int(os.getenv("OWNER_ID", "0"))
 GROUP_ID = int(os.getenv("GROUP_ID", "0"))  # Community group ID
-HEALTH_PORT = int(os.getenv("HEALTH_PORT") or os.getenv("PORT") or "8080")
+# Use a dedicated internal port for health checks, default to 8080
+HEALTH_PORT = int(os.getenv("HEALTH_PORT", "8080"))
 
 # Database Configuration
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")

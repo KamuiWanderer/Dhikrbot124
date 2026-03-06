@@ -52,7 +52,6 @@ async def health_handler(request):
 async def start_health_server():
     app = web.Application()
     app.router.add_get("/health", health_handler)
-    app.router.add_get("/",       health_handler)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", HEALTH_PORT)

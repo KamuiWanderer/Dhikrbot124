@@ -8,7 +8,7 @@ import AdmZip from "adm-zip";
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
   let botProcess: ChildProcess | null = null;
 
   app.use(express.json());

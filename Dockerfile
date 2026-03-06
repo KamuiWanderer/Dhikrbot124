@@ -32,6 +32,7 @@ EXPOSE 3000
 # Set environment variables
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV HEALTH_PORT=8080
 
 # Start the server
 CMD ["npm", "start"]
