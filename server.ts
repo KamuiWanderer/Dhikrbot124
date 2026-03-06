@@ -3,28 +3,57 @@ import { createServer as createViteServer } from "vite";
 import { spawn, spawnSync, ChildProcess } from "child_process";
 import path from "path";
 import fs from "fs";
-
+import { MongoClient } from "mongodb";
 import AdmZip from "adm-zip";
 
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
   let botProcess: ChildProcess | null = null;
+  
+  const mongoUri = process.env.MONGO_URI || "mongodb://localhost:27017";
+  const dbName = process.env.DB_NAME || "dhikr_bot";
+  let client: MongoClient | null = null;
+
+  try {
+    client = new MongoClient(mongoUri);
+    await client.connect();
+    console.log("Connected to MongoDB for dashboard stats");
+  } catch (err) {
+    console.error("Dashboard failed to connect to MongoDB:", err);
+  }
 
   app.use(express.json());
 
   // API Routes
-  app.get("/api/health", (req, res) => {
-    res.send("OK");
+  app.get(["/health", "/api/health"], (req, res) => {
+    res.status(200).send("OK");
   });
 
-  app.get("/api/status", (req, res) => {
+  app.get("/api/status", async (req, res) => {
     const pythonAvailable = spawnSync("python3", ["--version"]).status === 0;
     const pipAvailable = spawnSync("pip3", ["--version"]).status === 0;
+    
+    let dbStats = { users: 0, tasks: 0, contributions: 0 };
+    if (client) {
+      try {
+        const db = client.db(dbName);
+        dbStats.users = await db.collection("users").countDocuments();
+        dbStats.tasks = await db.collection("tasks").countDocuments({ status: "active" });
+        const contribs = await db.collection("contributions").aggregate([
+          { $group: { _id: null, total: { $sum: "$amount" } } }
+        ]).toArray();
+        dbStats.contributions = contribs[0]?.total || 0;
+      } catch (err) {
+        console.error("Failed to fetch db stats:", err);
+      }
+    }
+
     res.json({
       botRunning: botProcess !== null && !botProcess.killed,
       pythonAvailable,
       pipAvailable,
+      dbStats
     });
   });
 

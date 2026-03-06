@@ -25,4 +25,7 @@ DB_NAME = os.getenv("DB_NAME", "dhikr_bot")
 # Logic Configuration
 SUBMISSION_COOLDOWN_SECONDS = 3
 ABSOLUTE_MILESTONES = [1000, 5000, 10000, 50000, 100000, 500000, 1000000]
-MILESTONE_PERCENTAGES = [25, 50, 75, 100]
+MILESTONE_PERCENTAGES = [25, 50, 75]  # Removed 100 to avoid double announcement with task end
+
+# AI Configuration
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")

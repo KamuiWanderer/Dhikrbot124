@@ -49,13 +49,15 @@ async def dm_users(client, user_ids: list[int], text: str, protect_content: bool
                 buttons=buttons
             )
             sent += 1
-            await asyncio.sleep(0.05)   # stay within Telegram rate limits
+            await asyncio.sleep(0.1)   # slightly slower to be safer
         except Exception as e:
-            # Common errors: User blocked bot, user deactivated account, etc.
-            if "UserIsBlocked" in str(e) or "PeerIdInvalid" in str(e):
+            err_str = str(e)
+            if "UserIsBlocked" in err_str or "PeerIdInvalid" in err_str or "forbidden" in err_str.lower():
                 blocked += 1
             else:
+                print(f"Broadcast failure for {uid}: {err_str}")
                 failed += 1
+            await asyncio.sleep(0.05)
     return sent, blocked, failed
 
 
@@ -70,7 +72,9 @@ async def announce_task_published(client, task: dict):
             first_media = m.get("file_id")
     
     me = await client.get_me()
-    buttons = markup(row(btn("📿 Join Dhikr", f"https://t.me/{me.username}?start=task_{task['_id']}", "url")))
+    from keyboards.builder import tid
+    url = f"https://t.me/{me.username}?start=task_{tid(task['_id'])}"
+    buttons = markup(row(btn("📿 Join Dhikr", url, "url")))
     await send_group(client, text, first_media, buttons=buttons)
     
     users_with_notif = await q.get_users_with_notif("tasks")

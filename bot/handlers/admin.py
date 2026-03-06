@@ -4,7 +4,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from datetime import datetime, timedelta
 from telethon import events
 from bson import ObjectId
-from config import OWNER_ID
+import google.generativeai as genai
+from config import OWNER_ID, GEMINI_API_KEY
 from db import queries as q
 from db.queries import ALL_PERMISSIONS, SUPER_ADMIN_DEFAULTS, ADMIN_DEFAULTS
 from keyboards.builder import (
@@ -19,6 +20,7 @@ from keyboards.builder import (
     kb_yes_skip_cancel, kb_skip_cancel,
     kb_dhikr_categories, kb_dhikr_subcategories, kb_dhikr_sub_subcategories,
     kb_wiz_preset_choice,
+    kb_ai_suggest, kb_ai_refine,
     btn, row, markup
 )
 from utils.messages import (
@@ -47,6 +49,36 @@ async def check_access(event):
         return True
     await event.answer("❌ No admin access.", alert=True)
     return False
+
+# ── AI Helper ──────────────────────────────────────────────
+async def get_ai_suggestion(section, context, prompt_type="suggest"):
+    if not GEMINI_API_KEY:
+        return "❌ AI not configured (GEMINI_API_KEY missing)."
+    
+    genai.configure(apiKey=GEMINI_API_KEY)
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    
+    prompts = {
+        "title": "Suggest a catchy title for a Dhikr task. Context: {context}. Return ONLY the title.",
+        "description": "Write a short, inspiring description for a Dhikr task. Context: {context}. Return ONLY the description.",
+        "arabic": "Provide the correct Arabic text for this Dhikr: {context}. Return ONLY the Arabic text.",
+        "meaning": "Provide the English meaning for this Dhikr: {context}. Return ONLY the meaning.",
+        "reference": "Provide a short Hadith or Quranic reference for this Dhikr: {context}. Return ONLY the reference.",
+        "reminder": "Write a short intention reminder for this Dhikr: {context}. Return ONLY the reminder."
+    }
+    
+    base_prompt = prompts.get(section, "Suggest something for {section} based on {context}")
+    
+    if prompt_type == "longer":
+        base_prompt += " Make it longer and more detailed."
+    elif prompt_type == "shorter":
+        base_prompt += " Make it very short and concise."
+    
+    try:
+        response = await model.generate_content(base_prompt.format(section=section, context=context))
+        return response.text.strip()
+    except Exception as e:
+        return f"❌ AI Error: {str(e)}"
 
 
     # ── Reset Verification Text Input ────────────────────────
@@ -149,6 +181,45 @@ def register(client):
             await _wiz_yes(event, uid, state, wiz)
             return
 
+        # ── AI Suggestions ───────────────────────────────────
+        if data.startswith("wiz:ai:"):
+            parts = data.split(":")
+            action = parts[2]
+            section = parts[3]
+            
+            context = wiz.get("dhikr_text") or wiz.get("title") or "Dhikr"
+            
+            if action == "suggest":
+                await event.edit(f"🤖 <b>AI is thinking for {section}...</b>", parse_mode="html")
+                suggestion = await get_ai_suggestion(section, context)
+                wiz[f"ai_{section}_temp"] = suggestion
+                await event.edit(
+                    f"🤖 <b>AI Suggestion for {section}:</b>\n\n{h(suggestion)}",
+                    parse_mode="html",
+                    buttons=kb_ai_refine(section)
+                )
+                await q.update_state_data(uid, **{f"ai_{section}_temp": suggestion})
+                return
+            
+            elif action == "use":
+                suggestion = wiz.get(f"ai_{section}_temp")
+                if suggestion:
+                    wiz[section] = suggestion
+                    await _wiz_next(event, uid, state, wiz)
+                return
+            
+            elif action in ("longer", "shorter"):
+                await event.edit(f"🤖 <b>AI is refining {section}...</b>", parse_mode="html")
+                suggestion = await get_ai_suggestion(section, context, prompt_type=action)
+                wiz[f"ai_{section}_temp"] = suggestion
+                await event.edit(
+                    f"🤖 <b>AI Suggestion ({action}) for {section}:</b>\n\n{h(suggestion)}",
+                    parse_mode="html",
+                    buttons=kb_ai_refine(section)
+                )
+                await q.update_state_data(uid, **{f"ai_{section}_temp": suggestion})
+                return
+
         # Dhikr Categories
         if data == "wiz:dhikr":
             from constants import get_category_list
@@ -213,14 +284,15 @@ def register(client):
             from constants import DHIKR_PRESETS
             preset = DHIKR_PRESETS.get(wiz["sub_subcategory"])
             if preset:
-                wiz["dhikr_text_arabic"] = preset["arabic"]
-                wiz["dhikr_meaning"] = preset["meaning"]
-                wiz["description"] = preset["description"]
-                wiz["intention_reminder"] = preset["reminder"]
+                wiz["arabic"] = preset.get("arabic")
+                wiz["meaning"] = preset.get("meaning")
+                wiz["description"] = preset.get("description")
+                wiz["reference"] = preset.get("reference")
+                wiz["intention_reminder"] = preset.get("reminder")
             
-            await q.set_state(uid, "wiz:target", data=wiz)
-            await event.edit("<b>Step 4</b> — Enter the target count (e.g. 100000) or skip for unlimited:",
-                             parse_mode="html", buttons=kb_yes_skip_cancel())
+            await q.set_state(uid, "wiz:type", data=wiz)
+            await event.edit("<b>Step 7</b> — Choose task type:",
+                             parse_mode="html", buttons=kb_task_type())
             return
 
         if data == "wiz:preset:custom":
@@ -377,19 +449,31 @@ def register(client):
             wiz["dhikr_text"] = text
             await q.set_state(uid, "wiz:description", data=wiz)
             await event.respond("<b>Step 3</b> — Add a description? (optional)",
-                                parse_mode="html", buttons=kb_yes_skip_cancel())
+                                parse_mode="html", buttons=kb_ai_suggest("description"))
 
         elif state == "wiz:description_text":
             wiz["description"] = text
+            await q.set_state(uid, "wiz:arabic", data=wiz)
+            await event.respond("<b>Step 3.1</b> — Add Arabic text? (optional)",
+                                parse_mode="html", buttons=kb_ai_suggest("arabic"))
+
+        elif state == "wiz:arabic_text":
+            wiz["arabic"] = text
+            await q.set_state(uid, "wiz:meaning", data=wiz)
+            await event.respond("<b>Step 3.2</b> — Add English meaning? (optional)",
+                                parse_mode="html", buttons=kb_ai_suggest("meaning"))
+
+        elif state == "wiz:meaning_text":
+            wiz["meaning"] = text
             await q.set_state(uid, "wiz:reference", data=wiz)
             await event.respond("<b>Step 4</b> — Add a reference (Hadith/Ayah)? (optional)",
-                                parse_mode="html", buttons=kb_yes_skip_cancel())
+                                parse_mode="html", buttons=kb_ai_suggest("reference"))
 
         elif state == "wiz:reference_text":
             wiz["reference"] = text
             await q.set_state(uid, "wiz:intention", data=wiz)
             await event.respond("<b>Step 5</b> — Add an intention reminder? (optional)",
-                                parse_mode="html", buttons=kb_yes_skip_cancel())
+                                parse_mode="html", buttons=kb_ai_suggest("reminder"))
 
         elif state == "wiz:intention_text":
             wiz["intention_reminder"] = text
@@ -1279,23 +1363,37 @@ def register(client):
         elif data == "adm:settings:resetdb":
             from keyboards.builder import kb_reset_confirm
             await event.edit(
-                "🧨 <b>WARNING: DATABASE RESET</b>\n\n"
-                "This will wipe ALL users, tasks, and contributions.\n"
-                "This action is <b>IRREVERSIBLE</b>.\n\n"
+                "⚠️ <b>WARNING: DATABASE RESET</b>\n\n"
+                "This will permanently delete ALL users, tasks, and contributions.\n"
+                "This action CANNOT be undone.\n\n"
                 "Are you absolutely sure?",
                 parse_mode="html",
-                buttons=kb_reset_confirm()
+                buttons=kb_reset_confirm(step=1)
             )
 
-        elif data == "adm:settings:reset_confirm":
-            await q.set_state(uid, "adm:reset_verify")
+        elif data == "adm:settings:reset_step2":
+            from keyboards.builder import kb_reset_confirm
             await event.edit(
-                "🔒 <b>FINAL VERIFICATION</b>\n\n"
-                "To confirm the reset, please type exactly:\n"
-                "<code>RESET DATABASE NOW</code>",
+                "🛑 <b>SECOND CONFIRMATION</b>\n\n"
+                "Please find the correct button to proceed. Shuffling buttons now...",
                 parse_mode="html",
-                buttons=markup(row(btn("❌ Cancel", "adm:settings", "primary")))
+                buttons=kb_reset_confirm(step=2)
             )
+
+        elif data == "adm:settings:reset_step3":
+            from keyboards.builder import kb_reset_final
+            await event.edit(
+                "🔥 <b>FINAL WARNING</b>\n\n"
+                "This is your last chance to abort.\n"
+                "Tapping the button below will wipe EVERYTHING.",
+                parse_mode="html",
+                buttons=kb_reset_final()
+            )
+
+        elif data == "adm:settings:reset_final":
+            await q.reset_database()
+            await event.edit("💥 <b>DATABASE WIPED SUCCESSFULLY.</b>", parse_mode="html",
+                             buttons=kb_back_admin())
 
         elif data == "adm:settings:clearfsm":
             from db.models import fsm_states
@@ -1327,13 +1425,17 @@ def register(client):
 # ─────────────────────────────────────────────────────────────
 async def _wiz_next(event, uid, state, wiz):
     transitions = {
-        "wiz:description": ("wiz:reference",  "<b>Step 4</b> — Add a Hadith/Ayah reference? (optional)"),
+        "wiz:description": ("wiz:arabic",     "<b>Step 3.1</b> — Add Arabic text? (optional)"),
+        "wiz:arabic":      ("wiz:meaning",    "<b>Step 3.2</b> — Add English meaning? (optional)"),
+        "wiz:meaning":     ("wiz:reference",  "<b>Step 4</b> — Add a Hadith/Ayah reference? (optional)"),
         "wiz:reference":   ("wiz:intention",  "<b>Step 5</b> — Add an intention reminder? (optional)"),
         "wiz:intention":   ("wiz:type",       "<b>Step 7</b> — Choose task type:"),
     }
     kbs = {
-        "wiz:description": kb_yes_skip_cancel(),
-        "wiz:reference":   kb_yes_skip_cancel(),
+        "wiz:description": kb_ai_suggest("arabic"),
+        "wiz:arabic":      kb_ai_suggest("meaning"),
+        "wiz:meaning":     kb_ai_suggest("reference"),
+        "wiz:reference":   kb_ai_suggest("reminder"),
         "wiz:intention":   kb_task_type(),
     }
     if state in transitions:
@@ -1344,6 +1446,8 @@ async def _wiz_next(event, uid, state, wiz):
 async def _wiz_yes(event, uid, state, wiz):
     text_inputs = {
         "wiz:description": ("wiz:description_text", "✍️ Enter the task description:"),
+        "wiz:arabic":      ("wiz:arabic_text",      "✍️ Enter the Arabic text:"),
+        "wiz:meaning":     ("wiz:meaning_text",     "✍️ Enter the English meaning:"),
         "wiz:reference":   ("wiz:reference_text",   "✍️ Enter the Hadith/Ayah reference:"),
         "wiz:intention":   ("wiz:intention_text",   "✍️ Enter the intention reminder:"),
     }

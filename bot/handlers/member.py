@@ -108,7 +108,22 @@ def register(client):
                 buttons=kb_stats_view(scope="user", period="all")
             )
 
-        elif data.startswith("stats:scope:"):
+        elif data == "menu:settings":
+            await event.edit("⚙️ <b>Settings</b>", parse_mode="html",
+                             buttons=kb_settings(user))
+
+    # ── Stats callbacks ───────────────────────────────────────
+    @client.on(events.CallbackQuery(pattern=b"stats:.*"))
+    async def stats_callback(event):
+        uid = event.sender_id
+        data = event.data.decode()
+        user = await q.get_user(uid)
+        if not user:
+            await event.answer("Please register first.", alert=True)
+            return
+        await event.answer()
+
+        if data.startswith("stats:scope:"):
             scope = data.split(":")[2]
             text = await _build_stats_v2(uid, scope=scope, period="all")
             await event.edit(
@@ -127,10 +142,6 @@ def register(client):
                 parse_mode="html",
                 buttons=kb_stats_view(scope=scope, period=period)
             )
-
-        elif data == "menu:settings":
-            await event.edit("⚙️ <b>Settings</b>", parse_mode="html",
-                             buttons=kb_settings(user))
 
     # ── Task callbacks ───────────────────────────────────────
     @client.on(events.CallbackQuery(pattern=b"task:.*"))
@@ -500,14 +511,17 @@ async def _process_contribution(event, uid, task, task_id, amount, client):
     if task.get("target"):
         remaining_view = max(0, task["target"] - task["total_count"])
     
-    text = msg_task_view(task, user_total, user_daily)
+    confirmation = (
+        f"✅ <b>+{fmt_num(amount)} {task['dhikr_text']}</b> recorded!\n\n"
+        + msg_task_view(task, user_total, user_daily)
+    )
     kb = kb_task_view(task, user_total, remaining=remaining_view)
     
     try:
         if isinstance(event, events.CallbackQuery):
-            await event.edit(text, parse_mode="html", buttons=kb)
+            await event.edit(confirmation, parse_mode="html", buttons=kb)
         else:
-            await event.respond(text, parse_mode="html", buttons=kb)
+            await event.respond(confirmation, parse_mode="html", buttons=kb)
     except telethon.errors.rpcerrorlist.MessageNotModifiedError:
         pass
 
@@ -534,17 +548,3 @@ async def _process_contribution(event, uid, task, task_id, amount, client):
                 await q.add_milestone_announced(task_id, abs_m)
                 task["total_count"] = new_total
                 await announce_milestone(client, task, abs_m)
-
-    task = await q.get_task(task_id) or task
-    user_total = await q.get_user_task_total(task_id, uid)
-    user_daily = await q.get_user_daily_total(task_id, uid)
-    confirmation = (
-        f"✅ <b>+{fmt_num(amount)} {task['dhikr_text']}</b> recorded!\n\n"
-        + msg_task_view(task, user_total, user_daily)
-    )
-    try:
-        await event.edit(confirmation, parse_mode="html",
-                         buttons=kb_task_view(task, user_total))
-    except Exception:
-        await event.respond(confirmation, parse_mode="html",
-                            buttons=kb_task_view(task, user_total))

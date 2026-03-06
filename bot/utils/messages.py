@@ -123,31 +123,48 @@ def msg_task_view(task, user_total, user_daily):
     return "\n".join(lines)
 
 def msg_task_announcement(task):
+    title = h(task.get("title", "Untitled"))
+    dhikr = h(task.get("dhikr_text", "Dhikr"))
+    arabic = task.get("arabic")
+    meaning = task.get("meaning")
+    desc = task.get("description")
+    ref = task.get("reference")
+    
     lines = [
-        "🌟 <b>New Dhikr Task Started!</b>\n",
-        f"📿 <b>{h(task['title'])}</b>",
-        f"<i>Dhikr:</i> <b>{h(task['dhikr_text'])}</b>\n",
+        "🌟 <b>New Dhikr Task Started!</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"🏆 <b>{title}</b>",
+        f"📿 <b>Dhikr:</b> {dhikr}",
     ]
-    if task.get("arabic"):
-        lines.append(f"📖 <b>Arabic:</b>\n<code>{h(task['arabic'])}</code>\n")
-    if task.get("meaning"):
-        lines.append(f"🌍 <b>Meaning:</b>\n<i>{h(task['meaning'])}</i>\n")
-    if task.get("intention_reminder"):
-        lines.append(f"<blockquote>🤲 {h(task['intention_reminder'])}</blockquote>\n")
-    if task.get("description"):
-        lines.append(f"{h(task['description'])}\n")
-    if task.get("reference"):
-        lines.append(f"<blockquote>📖 {h(task['reference'])}</blockquote>\n")
+    
+    if arabic:
+        lines.append(f"\n<pre>\u200f{h(arabic)}\u200f</pre>")
+    if meaning:
+        lines.append(f"<i>({h(meaning)})</i>")
+    
+    details = []
     if task.get("target"):
-        lines.append(f"🎯 Target: <b>{fmt_num(task['target'])} {h(task['dhikr_text'])}</b>")
-    lines.append(f"⏰ Until: {ends_at_fmt(task)}")
-    lines.append(f"Type: {task_type_label(task['type'])}\n")
-    lines.append("➡️ Open the bot: /start")
+        details.append(f"🎯 <b>Target:</b> {fmt_num(task['target'])} {dhikr}")
+    details.append(f"⏰ <b>Until:</b> {ends_at_fmt(task)}")
+    details.append(f"🔢 <b>Type:</b> {task_type_label(task['type'])}")
+    
+    lines.append("\n" + "\n".join(details))
+    lines.append("━━━━━━━━━━━━━━━━━━━━")
+
+    if task.get("intention_reminder"):
+        lines.append(f"\n<blockquote>🤲 {h(task['intention_reminder'])}</blockquote>")
+    if desc:
+        lines.append(f"\n📝 <b>Description:</b>\n<blockquote>{h(desc)}</blockquote>")
+    if ref:
+        lines.append(f"\n📖 <b>Reference:</b>\n<blockquote>{h(ref)}</blockquote>")
+    
+    lines.append("\n➡️ <b>Join via bot:</b> /start")
     return "\n".join(lines)
 
 def msg_task_ended(task, final_count):
     return (
-        f"🏁 <b>Task Ended: {h(task['title'])}</b>\n\n"
+        f"🏁 <b>Task Ended: {h(task['title'])}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
         f"الحمد لله — <b>{fmt_num(final_count)} {h(task['dhikr_text'])}</b> submitted by our community.\n\n"
         f"جزاكم الله خيرًا to everyone who participated.\n"
         f"May every count be accepted. 🤲"
@@ -159,7 +176,7 @@ def msg_milestone(task, milestone, count):
     else:
         text = f"{fmt_num(int(milestone))} {h(task['dhikr_text'])}"
     return (
-        f"🎉 <b>الحمد لله! Milestone Reached!</b>\n\n"
+        f"🎉 <b>\u200fالحمد لله! Milestone Reached!\u200f</b>\n\n"
         f"📿 <b>{h(task['title'])}</b>\n"
         f"We have reached <b>{text}</b>!\n\n"
         f"<blockquote>Current total: <b>{fmt_num(count)} {h(task['dhikr_text'])}</b></blockquote>\n\n"
@@ -194,7 +211,7 @@ def msg_category_stats(stats, scope="user", period="all", lb=None, users_map=Non
         lines.append("<i>No contributions yet for this period.</i>")
     else:
         # Hierarchical grouping: Year -> Month -> Dhikr
-        months = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        months = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
         current_year = None
         current_month = None
         
@@ -206,25 +223,28 @@ def msg_category_stats(stats, scope="user", period="all", lb=None, users_map=Non
             
             if year != current_year:
                 lines.append(f"\n📅 <b>Year {year}</b>")
+                lines.append("═" * 20)
                 current_year = year
                 current_month = None
                 
             if month != current_month:
                 month_name = months[month] if 0 < month < len(months) else "Unknown"
-                lines.append(f"  🗓 <b>{month_name}</b>")
+                lines.append(f"\n🗓 <b>{month_name}</b>")
                 current_month = month
                 
-            lines.append(f"    ▫️ {h(dhikr)}: <b>{fmt_num(total)}</b>")
+            lines.append(f"  ▫️ {h(dhikr)}: <b>{fmt_num(total)}</b>")
 
     if lb and users_map:
         lines.append(f"\n🏆 <b>Top Contributors ({period_label})</b>")
+        lines.append("═" * 20)
         for i, r in enumerate(lb, 1):
             u = users_map.get(r["_id"])
             if not u or u.get("visibility") == "ghost":
                 continue
             name = (f"@{u['username']}" if u.get("username") else u.get("display_name","?")) \
                    if u.get("visibility") == "public" else u.get("anon_name","Servant_????")
-            lines.append(f"{i}. {h(name)} — {fmt_num(r['total'])}")
+            medal = ["🥇","🥈","🥉"][i-1] if i <= 3 else f"{i}."
+            lines.append(f"{medal} {h(name)} — <b>{fmt_num(r['total'])}</b>")
 
     return "\n".join(lines)
 

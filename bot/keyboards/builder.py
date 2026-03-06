@@ -12,6 +12,8 @@ def _style(color):
     )
 
 def btn(text, data, color="primary"):
+    if color == "url":
+        return types.KeyboardButtonUrl(text=text, url=data)
     return types.KeyboardButtonCallback(
         text=text,
         data=data.encode() if isinstance(data, str) else data,
@@ -87,25 +89,48 @@ def kb_task_list(active_tasks):
 
 def kb_task_view(task, user_task_total, remaining=None, leaderboard=True):
     # Dynamic buttons based on remaining
-    # If remaining is small, only show buttons that fit
-    options = [1, 10, 33, 100, 500, 1000]
-    
-    # Filter options: only show if they are <= remaining (if target exists)
-    visible_options = []
     if remaining is not None:
-        visible_options = [o for o in options if o <= remaining]
+        if remaining <= 0:
+            visible_options = []
+        elif remaining <= 10:
+            visible_options = [1, 2, 5]
+        elif remaining <= 50:
+            visible_options = [1, 5, 10]
+        elif remaining <= 100:
+            visible_options = [1, 10, 33]
+        elif remaining <= 500:
+            visible_options = [1, 33, 100]
+        elif remaining <= 1000:
+            visible_options = [1, 100, 313]
+        elif remaining <= 5000:
+            visible_options = [10, 100, 500]
+        elif remaining <= 10000:
+            visible_options = [33, 313, 1000]
+        else:
+            visible_options = [100, 1000, 5000]
+        
+        # Final filter: ensure they don't exceed remaining
+        visible_options = [o for o in visible_options if o <= remaining]
+        
+        # Add the exact remaining amount as a button if it's not already there
+        if remaining > 0 and remaining not in visible_options and remaining <= 10000:
+            visible_options.append(remaining)
+            visible_options.sort()
+
+        # If no options fit but remaining > 0, show exactly remaining
+        if not visible_options and remaining > 0:
+            visible_options = [remaining]
     else:
-        visible_options = options
-    
+        visible_options = [33, 100, 313, 1000]
+
     rows = []
     # Group into rows of 3
     for i in range(0, len(visible_options), 3):
         chunk = visible_options[i:i+3]
         rows.append(row(*[btn(f"+{fmt_num(o)}", f"contrib:{tid(task['_id'])}:{o}", "success") for o in chunk]))
     
-    # If no buttons are visible but remaining > 0, show a button for exactly 'remaining'
-    if not visible_options and remaining is not None and remaining > 0:
-        rows.append(row(btn(f"+{fmt_num(remaining)}", f"contrib:{tid(task['_id'])}:{remaining}", "success")))
+    # Add custom button
+    rows.append(row(btn("✍️  Custom Amount", f"contrib:{tid(task['_id'])}:custom", "primary")))
 
     if task.get("media"):
         rows.append(row(btn("📎  View Attachments", f"task:media:{tid(task['_id'])}", "primary")))
@@ -180,6 +205,22 @@ def kb_yes_skip_cancel():
         btn("⏭  Skip",   "wiz:skip",   "primary"),
         btn("🗑  Cancel", "wiz:cancel", "danger")
     ))
+
+def kb_ai_suggest(section):
+    return markup(
+        row(btn("🤖  AI Suggest", f"wiz:ai:suggest:{section}", "success")),
+        row(btn("⏭  Skip", "wiz:skip", "primary"), btn("🗑  Cancel", "wiz:cancel", "danger"))
+    )
+
+def kb_ai_refine(section):
+    return markup(
+        row(btn("✅  Use this", f"wiz:ai:use:{section}", "success")),
+        row(btn("🔄  Regenerate", f"wiz:ai:suggest:{section}", "primary")),
+        row(btn("➕  Make Longer", f"wiz:ai:longer:{section}", "primary"),
+            btn("➖  Make Shorter", f"wiz:ai:shorter:{section}", "primary")),
+        row(btn("✍️  Add Custom", "wiz:yes", "primary")),
+        row(btn("🗑  Cancel", "wiz:cancel", "danger"))
+    )
 
 def kb_task_type():
     return markup(
@@ -439,10 +480,32 @@ def kb_owner_settings():
         row(btn("⬅️  Back",                       "adm:main",               "primary")),
     )
 
-def kb_reset_confirm():
+def kb_reset_confirm(step=1):
+    import random
+    
+    if step == 1:
+        return markup(
+            row(btn("🧨 YES, RESET EVERYTHING", "adm:settings:reset_step2", "danger")),
+            row(btn("❌ Cancel", "adm:settings", "primary"))
+        )
+    
+    # Step 2: Shuffled buttons
+    buttons = [
+        btn("✅ CONFIRM RESET", "adm:settings:reset_step3", "danger"),
+        btn("❌ NO, STOP", "adm:settings", "primary"),
+        btn("❌ CANCEL", "adm:settings", "primary")
+    ]
+    random.shuffle(buttons)
+    
     return markup(
-        row(btn("🧨 YES, RESET EVERYTHING", "adm:settings:reset_confirm", "danger")),
-        row(btn("❌ Cancel", "adm:settings", "primary"))
+        row(buttons[0], buttons[1]),
+        row(buttons[2])
+    )
+
+def kb_reset_final():
+    return markup(
+        row(btn("🔥 FINAL CONFIRMATION: WIPE ALL DATA", "adm:settings:reset_final", "danger")),
+        row(btn("❌ ABORT", "adm:settings", "primary"))
     )
 
 def kb_back_admin():
