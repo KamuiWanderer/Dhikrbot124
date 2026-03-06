@@ -121,6 +121,22 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    
+    // Auto-start bot in production
+    if (process.env.NODE_ENV === "production" && !botProcess) {
+      const botPath = path.resolve(process.cwd(), "bot", "main.py");
+      if (fs.existsSync(botPath)) {
+        console.log("Auto-starting bot in production...");
+        botProcess = spawn("python3", [botPath], {
+          stdio: "inherit",
+          env: { ...process.env, PYTHONUNBUFFERED: "1" },
+        });
+        botProcess.on("exit", (code) => {
+          console.log(`Bot process exited with code ${code}`);
+          botProcess = null;
+        });
+      }
+    }
   });
 }
 
