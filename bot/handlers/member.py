@@ -23,6 +23,31 @@ from utils.announcements import announce_milestone, announce_task_ended
 _cooldowns: dict = {}
 
 
+async def show_task_view(event, task_id, is_new_msg=False):
+    uid = event.sender_id
+    task = await q.get_task(task_id)
+    if not task:
+        if is_new_msg:
+            await event.respond("Task not found.")
+        else:
+            await event.answer("Task not found.", alert=True)
+        return
+
+    user_total = await q.get_user_task_total(task_id, uid)
+    user_daily = await q.get_user_task_daily(task_id, uid)
+    
+    remaining = None
+    if task.get("target"):
+        remaining = max(0, task["target"] - task.get("total_count", 0))
+
+    text = msg_task_view(task, user_total, user_daily)
+    buttons = kb_task_view(task, user_total, remaining=remaining)
+    
+    if is_new_msg:
+        await event.respond(text, parse_mode="html", buttons=buttons)
+    else:
+        await event.edit(text, parse_mode="html", buttons=buttons)
+
 def register(client):
 
     # ── /stats command ───────────────────────────────────────
@@ -399,28 +424,18 @@ def register(client):
 # ── Helpers ───────────────────────────────────────────────────
 
 async def _build_stats_v2(uid, scope="user", period="all"):
-    from datetime import date
-    today = date.today().isoformat()
-    month_start = date.today().replace(day=1).isoformat()
-    year_start = date.today().replace(month=1, day=1).isoformat()
+    stats = await q.get_hierarchical_stats(uid if scope=="user" else None, period)
     
-    start_date = None
-    end_date = None
-    
-    if period == "today":
-        start_date = today
-        end_date = today
-    elif period == "month":
-        start_date = month_start
-    elif period == "year":
-        start_date = year_start
-        
-    if scope == "user":
-        stats = await q.get_user_category_stats(uid, start_date, end_date)
-    else:
-        stats = await q.get_global_category_stats(start_date, end_date)
-        
-    return msg_category_stats(stats, scope, period)
+    lb = None
+    users_map = {}
+    if period in ("today", "week", "month", "all"):
+        lb = await q.get_global_leaderboard(period, limit=5)
+        for r in lb:
+            u = await q.get_user(r["_id"])
+            if u:
+                users_map[r["_id"]] = u
+
+    return msg_category_stats(stats, scope, period, lb=lb, users_map=users_map)
 
 async def _build_stats(uid, user):
     today       = date.today().isoformat()

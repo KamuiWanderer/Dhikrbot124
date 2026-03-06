@@ -45,6 +45,30 @@ DHIKR_PRESETS = {
         "description": "The Opening Surah of the Quran.",
         "reminder": "Have you recited Surah Al-Fatiha today?"
     },
+    "Surah Al-Ikhlas": {
+        "arabic": "قُلْ هُوَ اللَّهُ أَحَدٌ (1) اللَّهُ الصَّمَدُ (2) لَمْ يَلِدْ وَلَمْ يُولَدْ (3) وَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ (4)",
+        "meaning": "Say, 'He is Allah, [who is] One, Allah, the Eternal Refuge. He neither begets nor is born, Nor is there to Him any equivalent.'",
+        "description": "Equivalent to one-third of the Quran.",
+        "reminder": "Recite Surah Al-Ikhlas for the love of Allah."
+    },
+    "Ayatul Kursi": {
+        "arabic": "اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ ۚ لَا تَأْخُذُهُ سِنَةٌ وَلَا نَوْمٌ...",
+        "meaning": "Allah - there is no deity except Him, the Ever-Living, the Sustainer of [all] existence...",
+        "description": "The greatest verse in the Quran.",
+        "reminder": "Protect yourself with Ayatul Kursi."
+    },
+    "La hawla wala quwwata illa billah": {
+        "arabic": "لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ",
+        "meaning": "There is no power and no strength except with Allah.",
+        "description": "A treasure from the treasures of Paradise.",
+        "reminder": "Rely on Allah's power: La hawla wala quwwata illa billah."
+    },
+    "SubhanAllahi wa bihamdihi": {
+        "arabic": "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ",
+        "meaning": "Glory be to Allah and Praise be to Him.",
+        "description": "Sins are forgiven even if they are like the foam of the sea.",
+        "reminder": "Cleanse your soul with 'SubhanAllahi wa bihamdihi'."
+    },
     "Astagfirullah": {
         "arabic": "أَسْتَغْفِرُ اللَّهَ",
         "meaning": "I seek forgiveness from Allah.",

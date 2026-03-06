@@ -128,6 +128,10 @@ def msg_task_announcement(task):
         f"📿 <b>{h(task['title'])}</b>",
         f"<i>Dhikr:</i> <b>{h(task['dhikr_text'])}</b>\n",
     ]
+    if task.get("arabic"):
+        lines.append(f"📖 <b>Arabic:</b>\n<code>{h(task['arabic'])}</code>\n")
+    if task.get("meaning"):
+        lines.append(f"🌍 <b>Meaning:</b>\n<i>{h(task['meaning'])}</i>\n")
     if task.get("intention_reminder"):
         lines.append(f"<blockquote>🤲 {h(task['intention_reminder'])}</blockquote>\n")
     if task.get("description"):
@@ -174,7 +178,7 @@ def msg_emergency_task(task):
 
 # ── STATS ─────────────────────────────────────────────────────
 
-def msg_category_stats(stats, scope="user", period="all"):
+def msg_category_stats(stats, scope="user", period="all", lb=None, users_map=None):
     scope_label = "Your" if scope == "user" else "Global"
     period_label = {
         "today": "Today",
@@ -188,31 +192,40 @@ def msg_category_stats(stats, scope="user", period="all"):
     
     if not stats:
         lines.append("<i>No contributions yet for this period.</i>")
-        return "\n".join(lines)
-    
-    # Hierarchical grouping: Year -> Month -> Dhikr
-    months = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    
-    current_year = None
-    current_month = None
-    
-    for s in stats:
-        year = s["_id"]["year"]
-        month = s["_id"]["month"]
-        dhikr = s["_id"]["dhikr_text"]
-        total = s["total"]
+    else:
+        # Hierarchical grouping: Year -> Month -> Dhikr
+        months = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        current_year = None
+        current_month = None
         
-        if year != current_year:
-            lines.append(f"\n📅 <b>Year {year}</b>")
-            current_year = year
-            current_month = None
+        for s in stats:
+            year = s["_id"].get("year", "Unknown")
+            month = s["_id"].get("month", 0)
+            dhikr = s["_id"].get("dhikr_text", "Unknown")
+            total = s["total"]
             
-        if month != current_month:
-            lines.append(f"  🗓 <b>{months[month]}</b>")
-            current_month = month
-            
-        lines.append(f"    ▫️ {h(dhikr)}: <b>{fmt_num(total)}</b>")
-        
+            if year != current_year:
+                lines.append(f"\n📅 <b>Year {year}</b>")
+                current_year = year
+                current_month = None
+                
+            if month != current_month:
+                month_name = months[month] if 0 < month < len(months) else "Unknown"
+                lines.append(f"  🗓 <b>{month_name}</b>")
+                current_month = month
+                
+            lines.append(f"    ▫️ {h(dhikr)}: <b>{fmt_num(total)}</b>")
+
+    if lb and users_map:
+        lines.append(f"\n🏆 <b>Top Contributors ({period_label})</b>")
+        for i, r in enumerate(lb, 1):
+            u = users_map.get(r["_id"])
+            if not u or u.get("visibility") == "ghost":
+                continue
+            name = (f"@{u['username']}" if u.get("username") else u.get("display_name","?")) \
+                   if u.get("visibility") == "public" else u.get("anon_name","Servant_????")
+            lines.append(f"{i}. {h(name)} — {fmt_num(r['total'])}")
+
     return "\n".join(lines)
 
 def msg_new_user_owner(user):

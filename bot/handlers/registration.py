@@ -23,11 +23,15 @@ def register(client):
     @client.on(events.NewMessage(pattern="/start"))
     async def cmd_start(event):
         uid = event.sender_id
+        args = event.message.message.split(" ", 1)
+        deep_link = args[1] if len(args) > 1 else None
 
         # Group: send "open in DM" message with bot link
         if not event.is_private:
             me = await client.get_me()
             bot_link = f"https://t.me/{me.username}"
+            if deep_link:
+                bot_link += f"?start={deep_link}"
             markup = types.ReplyInlineMarkup(rows=[
                 types.KeyboardButtonRow(buttons=[
                     types.KeyboardButtonUrl("🌙  Open Bot in DM", url=bot_link)
@@ -40,6 +44,15 @@ def register(client):
         if user:
             if user.get("is_banned"):
                 return
+            
+            # Handle deep links for registered users
+            if deep_link:
+                if deep_link.startswith("task_"):
+                    task_id = deep_link.split("_", 1)[1]
+                    from handlers.member import show_task_view
+                    await show_task_view(event, task_id, is_new_msg=True)
+                    return
+
             active = await q.get_active_tasks()
             is_admin_user = uid == OWNER_ID or await q.is_admin(uid)
             await event.respond(
@@ -51,7 +64,8 @@ def register(client):
             )
             return
 
-        await q.set_state(uid, "reg:welcome", data={})
+        # New user: start registration
+        await q.set_state(uid, "reg:welcome", data={"deep_link": deep_link})
         await event.respond(MSG_WELCOME, parse_mode="html", buttons=kb_welcome())
 
     # ── /admin shortcut ──────────────────────────────────────
@@ -210,6 +224,15 @@ async def _complete_registration(event, uid, wizard):
     from utils.messages import msg_new_user_owner
     from config import OWNER_ID
     try:
-        await event.client.send_message(OWNER_ID, msg_new_user_owner(user))
+        await event.client.send_message(OWNER_ID, msg_new_user_owner(user), parse_mode="html")
     except:
         pass
+
+    # Handle deep link after registration
+    deep_link = wizard.get("deep_link")
+    if deep_link and deep_link.startswith("task_"):
+        task_id = deep_link.split("_", 1)[1]
+        from handlers.member import show_task_view
+        import asyncio
+        await asyncio.sleep(1) # slight delay
+        await show_task_view(event, task_id, is_new_msg=True)

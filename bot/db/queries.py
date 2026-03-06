@@ -344,6 +344,28 @@ async def get_user_rank(task_id, user_id: int) -> int:
     ]).to_list(None)
     return (higher[0]["n"] if higher else 0) + 1
 
+async def get_global_leaderboard(period: str = "all", limit: int = 10):
+    match_q = {}
+    today = date.today()
+    if period == "today":
+        match_q["session_date"] = today.isoformat()
+    elif period == "week":
+        match_q["year"] = today.year
+        match_q["week"] = today.isocalendar()[1]
+    elif period == "month":
+        match_q["year"] = today.year
+        match_q["month"] = today.month
+    elif period == "year":
+        match_q["year"] = today.year
+
+    pipeline = [
+        {"$match": match_q},
+        {"$group": {"_id": "$user_id", "total": {"$sum": "$count"}}},
+        {"$sort": {"total": -1}},
+        {"$limit": limit}
+    ]
+    return await contributions().aggregate(pipeline).to_list(None)
+
 async def get_hierarchical_stats(user_id: int | None = None, period: str = "all"):
     """
     Returns stats grouped by Year -> Month -> Dhikr Type.
@@ -370,10 +392,9 @@ async def get_hierarchical_stats(user_id: int | None = None, period: str = "all"
         {
             "$group": {
                 "_id": {
-                    "year": "$year",
-                    "month": "$month",
-                    "dhikr_text": "$dhikr_text",
-                    "category": "$category"
+                    "year": {"$ifNull": ["$year", {"$year": "$submitted_at"}]},
+                    "month": {"$ifNull": ["$month", {"$month": "$submitted_at"}]},
+                    "dhikr_text": "$dhikr_text"
                 },
                 "total": {"$sum": "$count"}
             }
@@ -396,6 +417,15 @@ async def get_owner_concise_stats():
         "active_tasks": total_active_tasks,
         "total_dhikr": total_dhikr
     }
+
+async def reset_database():
+    """Wipes all data from the database. OWNER ONLY."""
+    await users().delete_many({})
+    await tasks().delete_many({})
+    await contributions().delete_many({})
+    await admins().delete_many({})
+    await states().delete_many({})
+    await notifications().delete_many({})
 
 async def remove_user_contributions(task_id, user_id: int):
     if isinstance(task_id, str):

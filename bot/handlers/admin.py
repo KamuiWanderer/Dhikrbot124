@@ -49,6 +49,37 @@ async def check_access(event):
     return False
 
 
+    # ── Reset Verification Text Input ────────────────────────
+    @client.on(events.NewMessage())
+    async def reset_verify_input(event):
+        if not event.is_private: return
+        uid = event.sender_id
+        if uid != OWNER_ID: return
+        state_doc = await q.get_state(uid)
+        if state_doc and state_doc["state"] == "adm:reset_verify":
+            if event.raw_text.strip() == "RESET DATABASE NOW":
+                await q.reset_database()
+                await q.clear_state(uid)
+                await event.respond("✅ <b>DATABASE RESET COMPLETE.</b>\nAll data has been wiped.", parse_mode="html")
+            else:
+                await event.respond("❌ Verification failed. Reset cancelled.")
+                await q.clear_state(uid)
+
+    @client.on(events.NewMessage(pattern="/resetdb"))
+    async def cmd_resetdb(event):
+        uid = event.sender_id
+        if uid != OWNER_ID:
+            return
+        from keyboards.builder import kb_reset_confirm
+        await event.respond(
+            "🧨 <b>WARNING: DATABASE RESET</b>\n\n"
+            "This will wipe ALL users, tasks, and contributions.\n"
+            "This action is <b>IRREVERSIBLE</b>.\n\n"
+            "Are you absolutely sure?",
+            parse_mode="html",
+            buttons=kb_reset_confirm()
+        )
+
 def register(client):
 
     @client.on(events.NewMessage(pattern="/botstats"))
@@ -1244,6 +1275,27 @@ def register(client):
         if data == "adm:settings":
             await event.edit("⚙️ <b>Bot Settings (Owner Only)</b>", parse_mode="html",
                              buttons=kb_owner_settings())
+
+        elif data == "adm:settings:resetdb":
+            from keyboards.builder import kb_reset_confirm
+            await event.edit(
+                "🧨 <b>WARNING: DATABASE RESET</b>\n\n"
+                "This will wipe ALL users, tasks, and contributions.\n"
+                "This action is <b>IRREVERSIBLE</b>.\n\n"
+                "Are you absolutely sure?",
+                parse_mode="html",
+                buttons=kb_reset_confirm()
+            )
+
+        elif data == "adm:settings:reset_confirm":
+            await q.set_state(uid, "adm:reset_verify")
+            await event.edit(
+                "🔒 <b>FINAL VERIFICATION</b>\n\n"
+                "To confirm the reset, please type exactly:\n"
+                "<code>RESET DATABASE NOW</code>",
+                parse_mode="html",
+                buttons=markup(row(btn("❌ Cancel", "adm:settings", "primary")))
+            )
 
         elif data == "adm:settings:clearfsm":
             from db.models import fsm_states

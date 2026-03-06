@@ -72,9 +72,30 @@ async def announce_task_published(client, task: dict):
     me = await client.get_me()
     buttons = markup(row(btn("📿 Join Dhikr", f"https://t.me/{me.username}?start=task_{task['_id']}", "url")))
     await send_group(client, text, first_media, buttons=buttons)
-    users = await q.get_users_with_notif("tasks")
-    await dm_users(client, [u["user_id"] for u in users], text, buttons=buttons)
+    
+    users_with_notif = await q.get_users_with_notif("tasks")
+    all_users_count = await q.get_user_count()
+    
+    sent, blocked, failed = await dm_users(client, [u["user_id"] for u in users_with_notif], text, buttons=buttons)
     await q.log_notification("task_start", task["_id"])
+    
+    # Notify owner about broadcast results
+    from config import OWNER_ID
+    notifs_off = all_users_count - len(users_with_notif)
+    owner_msg = (
+        f"🚀 <b>Task Announcement Status</b>\n\n"
+        f"📋 Task: {h(task['title'])}\n"
+        f"👥 Total Users: {all_users_count}\n"
+        f"🔔 Notifications ON: {len(users_with_notif)}\n"
+        f"🔕 Notifications OFF: {notifs_off}\n\n"
+        f"✅ Successfully sent: {sent}\n"
+        f"🚫 Blocked: {blocked}\n"
+        f"❌ Failed: {failed}"
+    )
+    try:
+        await client.send_message(OWNER_ID, owner_msg, parse_mode="html")
+    except:
+        pass
 
 
 async def announce_task_ended(client, task: dict):

@@ -87,8 +87,15 @@ def kb_task_list(active_tasks):
 
 def kb_task_view(task, user_task_total, remaining=None, leaderboard=True):
     # Dynamic buttons based on remaining
+    # If remaining is small, only show buttons that fit
     options = [1, 10, 33, 100, 500, 1000]
-    visible_options = [o for o in options if remaining is None or o <= remaining]
+    
+    # Filter options: only show if they are <= remaining (if target exists)
+    visible_options = []
+    if remaining is not None:
+        visible_options = [o for o in options if o <= remaining]
+    else:
+        visible_options = options
     
     rows = []
     # Group into rows of 3
@@ -96,9 +103,10 @@ def kb_task_view(task, user_task_total, remaining=None, leaderboard=True):
         chunk = visible_options[i:i+3]
         rows.append(row(*[btn(f"+{fmt_num(o)}", f"contrib:{tid(task['_id'])}:{o}", "success") for o in chunk]))
     
-    if remaining is None or remaining > 0:
-        rows.append(row(btn("✍️ Custom Amount", f"contrib:{tid(task['_id'])}:custom", "primary")))
-    
+    # If no buttons are visible but remaining > 0, show a button for exactly 'remaining'
+    if not visible_options and remaining is not None and remaining > 0:
+        rows.append(row(btn(f"+{fmt_num(remaining)}", f"contrib:{tid(task['_id'])}:{remaining}", "success")))
+
     if task.get("media"):
         rows.append(row(btn("📎  View Attachments", f"task:media:{tid(task['_id'])}", "primary")))
     if leaderboard and task.get("leaderboard_visible", True):
@@ -427,7 +435,14 @@ def kb_owner_settings():
         row(btn("📣  Announcement Templates",     "adm:settings:templates",  "primary")),
         row(btn("📊  Toggle Group Stats",         "adm:settings:groupstats", "primary")),
         row(btn("🧹  Clear All FSM States",       "adm:settings:clearfsm",   "danger")),
+        row(btn("🧨  RESET DATABASE",             "adm:settings:resetdb",    "danger")),
         row(btn("⬅️  Back",                       "adm:main",               "primary")),
+    )
+
+def kb_reset_confirm():
+    return markup(
+        row(btn("🧨 YES, RESET EVERYTHING", "adm:settings:reset_confirm", "danger")),
+        row(btn("❌ Cancel", "adm:settings", "primary"))
     )
 
 def kb_back_admin():
